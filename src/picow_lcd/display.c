@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "pico/stdlib.h"
 #include "lcd_sdk/lcd.h"
 #include "http_weather/http_weather.h"
@@ -11,9 +12,11 @@ const uint16_t umbrella_bitmap[16 * 16] = {
 void display_weather(const WeatherData *data) {
     lcd_init();
     lcd_fill_screen(rgb565(0, 0, 0)); // 검정
+    
+    // 함수가 잘 실행되는지 디버깅 함수
+    printf("기온: %s°C\n", data->temperature);
+    printf("날씨: %s\n", data->weather);
 
     lcd_draw_text(10, 20, "Robot Engineer!!", rgb565(255, 255, 0), rgb565(0, 0, 0));
     lcd_draw_bitmap_scaled(48, 64, 16, 16, umbrella_bitmap, 2);
-
-    while (1);
 }

@@ -5,6 +5,14 @@
 
 #include "http_weather/http_weather.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void display_weather(const WeatherData *data);
 
+#ifdef __cplusplus
+}
 #endif
+
+#endif // DISPLAY_H

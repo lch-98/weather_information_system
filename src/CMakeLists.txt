@@ -1,5 +1,6 @@
 # src/CMakeLists.txt
 add_executable(main
+    main.cpp
     http_weather/http_weather.c
     http_weather/ntp_sync/ntp_client.c
     picow_lcd/display.c

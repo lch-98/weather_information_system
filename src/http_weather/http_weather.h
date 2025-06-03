@@ -6,11 +6,19 @@
 
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     char temperature[8];  // 예: "23.5"
     char weather[16];     // 예: "맑음", "비", etc
 } WeatherData;
 
 bool fetch_weather_data(WeatherData *data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // HTTP_WEATHER_H

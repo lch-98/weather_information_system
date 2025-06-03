@@ -14,7 +14,7 @@
 
 #include "json/jsmn.h"
 
-#define WIFI_SSID "WiFI ID"
+#define WIFI_SSID "WIFI ID"
 #define WIFI_PASS "WIFI PASSWORD"
 
 #define API_HOST "apis.data.go.kr"
@@ -24,7 +24,7 @@
 char http_request[1024];
 char http_response[4096];
 static int response_offset = 0;
-static volatile int request_done = 0;
+static volatile int request_done = 0; // 요청이 끝났음을 알리는 변수
 static WeatherData *global_out = NULL; // 결과를 저장할 전역 포인터
 
 // jsmn key match helper
@@ -132,7 +132,8 @@ err_t on_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err) {
             body += 4;
             parse_json_response(body);
         }
-
+        
+        request_done = 1;  // 요청이 끝난 것을 알림
         tcp_close(pcb);
         return ERR_OK;
     }
@@ -220,7 +221,7 @@ bool fetch_weather_data(WeatherData *out) {
         connect_to_api(&ipaddr);
     }
 
-    while (true) {
+    while (!request_done) {
         cyw43_arch_poll();
         sleep_ms(10);
     }
