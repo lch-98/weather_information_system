@@ -1,22 +1,18 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "lcd_sdk/lcd.h"
+#include "lcd_sdk/icon.h"
 #include "http_weather/http_weather.h"
-
-// bit map (16*16)
-const uint16_t umbrella_bitmap[16 * 16] = {
-    // 여기에 256개의 RGB565 색상값 넣으세요
-    [0 ... 255] = 0xFFE0
-};
 
 void display_weather(const WeatherData *data) {
     lcd_init();
-    lcd_fill_screen(rgb565(0, 0, 0)); // 검정
+    lcd_fill_screen(rgb565(255, 255, 255)); // 흰색
     
-    // 함수가 잘 실행되는지 디버깅 함수
-    printf("기온: %s°C\n", data->temperature);
-    printf("날씨: %s\n", data->weather);
-
-    lcd_draw_text(10, 20, "Robot Engineer!!", rgb565(255, 255, 0), rgb565(0, 0, 0));
-    lcd_draw_bitmap_scaled(48, 64, 16, 16, umbrella_bitmap, 2);
+    // 함수가 잘 실행되는지 디버깅
+    //printf("기온: %s°C\n", data->temperature);
+    //printf("날씨: %s\n", data->weather);
+    lcd_draw_text_mixed(5, 10, "기온 : N/A℃ ", rgb565(25, 25, 112), rgb565(255, 255, 255));
+    lcd_draw_text_mixed(5, 30, "날씨 : N/A", rgb565(25, 25, 112), rgb565(255, 255, 255));
+    lcd_draw_signnum_string_scaled(4, 53, "23:55", rgb565(25, 25, 112), rgb565(255, 255, 255), 3);
+    lcd_draw_bitmap_scaled(40, 105, 50, 50, umbrella_bitmap, 1);
 }

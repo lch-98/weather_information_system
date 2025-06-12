@@ -19,7 +19,7 @@
 
 #define API_HOST "apis.data.go.kr"
 #define API_PORT 80
-#define API_KEY "API KEY (Encoding)"
+#define API_KEY "API KEY"
 
 char http_request[1024];
 char http_response[4096];
@@ -203,8 +203,8 @@ bool fetch_weather_data(WeatherData *out) {
     get_current_hour(hour);
 
     // debugging time check
-    // printf(">>> 요청에 사용된 날짜: %s\n", date);
-    // printf(">>> 요청에 사용된 시간: %s\n", hour);
+    printf(">>> 요청에 사용된 날짜: %s\n", date);
+    printf(">>> 요청에 사용된 시간: %s\n", hour);
 
     snprintf(http_request, sizeof(http_request),
              "GET /1360000/VilageFcstInfoService_2.0/getUltraSrtNcst"

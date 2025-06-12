@@ -5,7 +5,8 @@ add_executable(main
     http_weather/ntp_sync/ntp_client.c
     picow_lcd/display.c
     picow_lcd/lcd_sdk/lcd.c
-    picow_lcd/lcd_sdk/font5x7.c
+    picow_lcd/lcd_sdk/icon.c
+    picow_lcd/lcd_sdk/font.c
 )
 
 target_include_directories(main PRIVATE

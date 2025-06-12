@@ -1,5 +1,5 @@
 #include "lcd.h"
-#include "font5x7.h"
+#include "font.h"
 #include "hardware/spi.h"
 #include "pico/stdlib.h"
 
@@ -58,48 +58,76 @@ void lcd_fill_screen(uint16_t color) {
     }
 }
 
-void lcd_draw_char(int x, int y, char c, uint16_t fg, uint16_t bg) {
-    if (c < 32 || c > 126) c = '?';
-    const uint8_t *bitmap = font5x7[c - 32];
+const uint8_t* find_hangul_bitmap(uint16_t unicode) {
+    for (int i = 0; i < get_hangul_font_count(); i++) {
+        if (hangul_fonts[i].unicode == unicode) {
+            return hangul_fonts[i].bitmap;
+        }
+    }
+    return NULL;
+}
 
-    for (int col = 0; col < 5; col++) {
-        uint8_t line = bitmap[col];
-        for (int row = 0; row < 7; row++) {
-            uint16_t color = (line & (1 << row)) ? fg : bg;
+const uint8_t* find_signnum_bitmap(uint16_t unicode) {
+    for (int i = 0; i < get_signnum_font_count(); i++) {
+        if (signnum_fonts[i].unicode == unicode) {
+            return signnum_fonts[i].bitmap;
+        }
+    }
+    return NULL;
+}
+
+void lcd_draw_signnum(int x, int y, uint16_t unicode, uint16_t fg, uint16_t bg) {
+    const uint8_t* bitmap = find_signnum_bitmap(unicode);
+    if (!bitmap) return;
+
+    for (int row = 0; row < 16; row++) {
+        uint8_t byte = bitmap[row];
+        for (int col = 0; col < 8; col++) {
+            uint16_t color = (byte & (0x80 >> col)) ? fg : bg;
             lcd_draw_pixel(x + col, y + row, color);
         }
     }
+}
 
-    // 글자 간격용 1픽셀
-    for (int row = 0; row < 7; row++) {
-        lcd_draw_pixel(x + 5, y + row, bg);
+void lcd_draw_hangul(int x, int y, uint16_t unicode, uint16_t fg, uint16_t bg) {
+    const uint8_t* bitmap = find_hangul_bitmap(unicode);
+    if (!bitmap) return;
+
+    for (int row = 0; row < 16; row++) {
+        uint8_t high = bitmap[row * 2];     // 왼쪽 8비트
+        uint8_t low  = bitmap[row * 2 + 1]; // 오른쪽 8비트
+
+        for (int col = 0; col < 8; col++) {
+            uint16_t color = (high & (0x80 >> col)) ? fg : bg;
+            lcd_draw_pixel(x + col, y + row, color);
+        }
+        for (int col = 0; col < 8; col++) {
+            uint16_t color = (low & (0x80 >> col)) ? fg : bg;
+            lcd_draw_pixel(x + 8 + col, y + row, color);
+        }
     }
 }
 
-void lcd_draw_text(int x, int y, const char *str, uint16_t fg, uint16_t bg) {
+void lcd_draw_text_mixed(int x, int y, const char *str, uint16_t fg, uint16_t bg) {
     while (*str) {
-        lcd_draw_char(x, y, *str++, fg, bg);
-        x += 6; // 5px + 1 spacing
+        uint8_t c = *str;
+
+        // UTF-8: 한글은 3바이트로 시작이 0xE1 ~ 0xEC
+        if ((c & 0xF0) == 0xE0 && str[1] && str[2]) {
+            uint16_t unicode = ((str[0] & 0x0F) << 12) |
+                               ((str[1] & 0x3F) << 6) |
+                               (str[2] & 0x3F);
+            lcd_draw_hangul(x, y, unicode, fg, bg);
+            str += 3;
+            x += 16;
+        }
+        // ASCII 문자 (1바이트)
+        else {
+            lcd_draw_signnum(x, y, c, fg, bg);
+            str++;
+            x += 8;
+        }
     }
-}
-
-// 원래 크기대로 bitmap을 그려주는 함수
-void lcd_draw_bitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t *bitmap) {
-    if (x >= LCD_WIDTH || y >= LCD_HEIGHT) return;
-    if (x + w > LCD_WIDTH) w = LCD_WIDTH - x;
-    if (y + h > LCD_HEIGHT) h = LCD_HEIGHT - y;
-
-    lcd_set_addr_window(x, y, x + w - 1, y + h - 1);
-
-    gpio_put(LCD_DC, 1);
-    gpio_put(LCD_CS, 0);
-
-    for (int i = 0; i < w * h; i++) {
-        uint8_t data[2] = { bitmap[i] >> 8, bitmap[i] & 0xFF };
-        spi_write_blocking(spi1, data, 2);
-    }
-
-    gpio_put(LCD_CS, 1);
 }
 
 // bitmap을 크게 확대 해주는 함수
@@ -115,6 +143,34 @@ void lcd_draw_bitmap_scaled(int x, int y, int w, int h, const uint16_t *data, in
         }
     }
 }
+
+void convert_signnum_bitmap_to_rgb565(const uint8_t *bitmap, uint16_t *out, int width, int height, uint16_t fg, uint16_t bg) {
+    for (int row = 0; row < height; row++) {
+        uint8_t byte = bitmap[row];
+        for (int col = 0; col < width; col++) {
+            uint16_t color = (byte & (0x80 >> col)) ? fg : bg;
+            out[row * width + col] = color;
+        }
+    }
+}
+
+void lcd_draw_signnum_scaled(int x, int y, uint16_t unicode, uint16_t fg, uint16_t bg, int scale) {
+    const uint8_t *bitmap = find_signnum_bitmap(unicode);
+    if (!bitmap) return;
+
+    uint16_t buffer[8 * 16]; // 8x16 픽셀용 버퍼
+    convert_signnum_bitmap_to_rgb565(bitmap, buffer, 8, 16, fg, bg);
+    lcd_draw_bitmap_scaled(x, y, 8, 16, buffer, scale);
+}
+
+void lcd_draw_signnum_string_scaled(int x, int y, const char *str, uint16_t fg, uint16_t bg, int scale) {
+    while (*str) {
+        lcd_draw_signnum_scaled(x, y, *str, fg, bg, scale);
+        x += 8 * scale;  // 문자 폭 8 * 배율만큼 이동
+        str++;
+    }
+}
+
 
 uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
     return ((r & 0xF8) << 8) |

@@ -17,12 +17,12 @@ int main() {
         printf("날씨 데이터를 가져오는 데 실패했습니다.\n");
         return 1;
     }
-
+    // 디버깅
     printf(">>> 온도: %s°C\n", weather.temperature);
     printf(">>> 날씨: %s\n", weather.weather);
 
     // 화면 출력
-    display_weather(&weather); // display_weather는 display.c에 정의되어야 함
+    display_weather(&weather); // display_weather는 display.c에 존재
 
     while (true) {
         sleep_ms(1000); // 대기 루프
