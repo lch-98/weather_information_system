@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 
@@ -9,7 +10,8 @@
 #include "lwip/ip4_addr.h"
 #include "lwip/dns.h"
 #include "lwip/udp.h"
-#include "ntp_sync/ntp_client.h"
+
+#include "ntp_client.h"
 #include "http_weather.h"
 
 #include "json/jsmn.h"
@@ -24,8 +26,8 @@
 char http_request[1024];
 char http_response[4096];
 static int response_offset = 0;
-static volatile int request_done = 0; // 요청이 끝났음을 알리는 변수
-static WeatherData *global_out = NULL; // 결과를 저장할 전역 포인터
+static volatile int request_done = 0; // 요청 완료 플래그
+static WeatherTimeData *global_out = NULL; // 결과 저장용 전역 포인터
 
 // jsmn key match helper
 int jsmn_eq(const char *json, jsmntok_t *tok, const char *s) {
@@ -34,20 +36,21 @@ int jsmn_eq(const char *json, jsmntok_t *tok, const char *s) {
             strncmp(json + tok->start, s, tok->end - tok->start) == 0);
 }
 
-// 날짜 및 시간 생성
+// 현재 날짜 문자열 생성 (YYYYMMDD)
 void get_current_date(char *buf) {
-    time_t now = get_ntp_time() + 9 * 60 * 60;
+    time_t now = get_ntp_time();
     struct tm *t = localtime(&now);
     strftime(buf, 9, "%Y%m%d", t);
 }
 
+// 현재 시간 문자열 생성 (HHMM)
 void get_current_hour(char *buf) {
-    time_t now = get_ntp_time() + 9 * 60 * 60;
+    time_t now = get_ntp_time();
     struct tm *t = localtime(&now);
     strftime(buf, 5, "%H%M", t);
 }
 
-// 날씨 상태 매핑
+// 날씨 코드 -> 문자열 매핑
 const char* map_weather(const char *code) {
     if (strcmp(code, "0") == 0) return "맑음";
     if (strcmp(code, "1") == 0) return "비";
@@ -69,27 +72,22 @@ void parse_json_response(const char *json_start) {
         return;
     }
 
-    const char *temp = NULL;
-    const char *pty = NULL;
+    char *temp = NULL;
+    char *pty = NULL;
 
     for (int i = 0; i < r; i++) {
         if (jsmn_eq(json_start, &tokens[i], "category")) {
-            char category[4];
-            snprintf(category, sizeof(category),
-                     "%.*s", tokens[i+1].end - tokens[i+1].start, json_start + tokens[i+1].start);
+            int len = tokens[i+1].end - tokens[i+1].start;
+            char category[8];
+            snprintf(category, sizeof(category), "%.*s", len, json_start + tokens[i+1].start);
 
             if (strcmp(category, "T1H") == 0 || strcmp(category, "PTY") == 0) {
-                // obsrValue까지 넘어가기 위해 순회
                 for (int j = i; j < r; j++) {
                     if (jsmn_eq(json_start, &tokens[j], "obsrValue")) {
-                        int len = tokens[j+1].end - tokens[j+1].start;
-                        char *value = strndup(json_start + tokens[j+1].start, len);
-
-                        if (strcmp(category, "T1H") == 0) {
-                            temp = value;
-                        } else if (strcmp(category, "PTY") == 0) {
-                            pty = value;
-                        }
+                        int val_len = tokens[j+1].end - tokens[j+1].start;
+                        char *value = strndup(json_start + tokens[j+1].start, val_len);
+                        if (strcmp(category, "T1H") == 0) temp = value;
+                        else if (strcmp(category, "PTY") == 0) pty = value;
                         break;
                     }
                 }
@@ -97,43 +95,40 @@ void parse_json_response(const char *json_start) {
         }
     }
 
-    if (global_out) {
+    if (global_out) { // global_out에 기온값, 날씨값 추가
         if (temp) {
-            strncpy(global_out->temperature, temp, sizeof(global_out->temperature)-1);
-            global_out->temperature[sizeof(global_out->temperature)-1] = '\0';
+            snprintf(global_out->temperature, sizeof(global_out->temperature), "기온 : %s℃", temp);
         } else {
-            strcpy(global_out->temperature, "N/A");
+            snprintf(global_out->temperature, sizeof(global_out->temperature), "기온 : N/A");
         }
-
+    
         if (pty) {
             const char *weather_str = map_weather(pty);
-            strncpy(global_out->weather, weather_str, sizeof(global_out->weather)-1);
-            global_out->weather[sizeof(global_out->weather)-1] = '\0';
+            snprintf(global_out->weather, sizeof(global_out->weather), "날씨 : %s", weather_str);
+            snprintf(global_out->lcd_weather, sizeof(global_out->lcd_weather), "%s", pty); // lcd에서 날씨 값 판별해서 사용하기 위한 배열
         } else {
-            strcpy(global_out->weather, "알 수 없음");
+            snprintf(global_out->weather, sizeof(global_out->weather), "날씨 : 알 수 없음");
         }
     }
 
-    printf("기온: %s°C\n", temp ? temp : "N/A");
-    printf("날씨: %s\n", pty ? map_weather(pty) : "알 수 없음");
+    printf(">>> 기온: %s℃\n", temp ? temp : "N/A");
+    printf(">>> 날씨: %s\n", pty ? map_weather(pty) : "알 수 없음");
 
-    // 메모리 해제
-    if (temp) free((void *)temp);
-    if (pty) free((void *)pty);
+    if (temp) free(temp);
+    if (pty) free(pty);
 }
 
 err_t on_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err) {
     if (!p) {
         printf("Connection closed by server.\n");
 
-        // HTTP 바디 시작 찾기
         char *body = strstr(http_response, "\r\n\r\n");
         if (body) {
             body += 4;
             parse_json_response(body);
         }
-        
-        request_done = 1;  // 요청이 끝난 것을 알림
+
+        request_done = 1;
         tcp_close(pcb);
         return ERR_OK;
     }
@@ -171,50 +166,55 @@ void dns_cb(const char *name, const ip_addr_t *ipaddr, void *arg) {
     }
 }
 
-bool fetch_weather_data(WeatherData *out) {
+bool fetch_weather_data(WeatherTimeData *out, time_t *base_time, absolute_time_t *base_ticks) {
     if (!out) return false;
     global_out = out;
+
     response_offset = 0;
     request_done = 0;
     memset(http_response, 0, sizeof(http_response));
 
     if (cyw43_arch_init()) {
         printf("Wi-Fi init failed\n");
-        return 1;
+        return false;
     }
-
     cyw43_arch_enable_sta_mode();
+
     printf("Connecting to Wi-Fi...\n");
     if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASS, CYW43_AUTH_WPA2_AES_PSK, 10000)) {
         printf("Wi-Fi connection failed\n");
-        return 1;
+        return false;
     }
-
     printf("Wi-Fi connected.\n");
 
-    // Time synchronization (RTC timer works, but Internet Time (NTP) must be synchronized)
     if (!run_ntp_sync()) {
-        printf("NTP 시간 동기화 실패\n");
-        return 1;
+        printf("NTP time sync failed\n");
+        return false;
+    }
+
+    if (base_time && base_ticks) {
+        *base_time = get_ntp_time();              // 동기화된 NTP 시간 바로 저장
+        *base_ticks = get_absolute_time();        // 현재 타이머 tick도 저장
     }
 
     char date[9], hour[5];
-    get_current_date(date);
-    get_current_hour(hour);
+    get_current_date(date);  // "YYYYMMDD"
+    get_current_hour(hour);  // "HHMM"
+    
+    // global out에 date값 추출
+    snprintf(global_out->date, sizeof(global_out->date), "%c%c/%c%c/%c%c", date[2], date[3], date[4], date[5], date[6], date[7]);
+    snprintf(global_out->time, sizeof(global_out->time), "%c%c : %c%c", hour[0], hour[1], hour[2], hour[3]);
 
-    // debugging time check
-    printf(">>> 요청에 사용된 날짜: %s\n", date);
-    printf(">>> 요청에 사용된 시간: %s\n", hour);
+    printf(">>> 기상청 API 요청에 사용된 날짜: %s\n", date);
+    printf(">>> 기상청 API 요청에 사용된 시간: %s\n", hour);
 
     snprintf(http_request, sizeof(http_request),
              "GET /1360000/VilageFcstInfoService_2.0/getUltraSrtNcst"
              "?serviceKey=%s&pageNo=1&numOfRows=10&dataType=JSON"
              "&base_date=%s&base_time=%s&nx=55&ny=127 HTTP/1.1\r\n"
-             "Host: apis.data.go.kr\r\nConnection: close\r\n\r\n",
-             API_KEY, date, hour);
-    // debugging http request
-    // printf("생성된 HTTP 요청:\n%s\n", http_request);
-    
+             "Host: %s\r\nConnection: close\r\n\r\n",
+             API_KEY, date, hour, API_HOST);
+
     ip_addr_t ipaddr;
     err_t err = dns_gethostbyname(API_HOST, &ipaddr, dns_cb, NULL);
     if (err == ERR_OK) {
@@ -226,5 +226,5 @@ bool fetch_weather_data(WeatherData *out) {
         sleep_ms(10);
     }
 
-    return 1;
+    return true;
 }

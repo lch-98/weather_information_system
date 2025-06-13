@@ -9,7 +9,8 @@
 extern "C" {
 #endif
 
-void display_weather(const WeatherData *data);
+void init_display_weather(const WeatherTimeData *data);
+void display_time_update(const WeatherTimeData *data);
 
 #ifdef __cplusplus
 }

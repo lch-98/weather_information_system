@@ -27,7 +27,7 @@ typedef struct {
 static ntp_state_t ntp_state = {0};
 
 time_t get_ntp_time() {
-    return ntp_state.synced_time;
+    return ntp_state.synced_time  + 9 * 60 * 60; // 한국시간 동기화
 }
 
 static void ntp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p,
