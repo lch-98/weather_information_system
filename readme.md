@@ -5,6 +5,14 @@
 (`FreeRTOS, SPI, Http, Wifi 등`)의 기술을 **실습**해 볼 수 있습니다.
 <br><br>
 
+## 🎬 실행 결과 (블로그 영상)
+
+[![실행 영상 썸네일](https://github.com/user-attachments/assets/1e8f200f-3686-469e-a427-e18fa90089ea)](https://blog.naver.com/dlcndgusgnss/223886415576)
+
+> 📌 위 이미지를 클릭하면 블로그에 올린 실제 시연 영상으로 이동합니다.
+
+<br>
+
 ## 🛠️ 개발 환경
 
 - Ubuntu >= 20.04
