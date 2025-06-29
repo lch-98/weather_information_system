@@ -24,6 +24,13 @@
 - VScode
 <br><br>
 
+## 🧭 시스템 구성도
+
+![다이어그램](https://github.com/user-attachments/assets/0e6f931c-bb53-48ee-bca4-3944df52af73)
+
+> 📌 Raspberry Pi Pico W 기반 기상 정보 시스템의 전체 구조
+<br>
+
 ## 🚀 빌드 및 실행 방법
 ```bash
 # 1. 프로젝트 폴더 안에 Git clone (깃 복사) 및 서브 모듈 초기화 (pico-sdk, FreeRTOS-Kernel)
